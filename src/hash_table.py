@@ -11,13 +11,27 @@ class _Node:
 
 
 class HashTable:
-    """A hash table with Horner hashing and a 0.75 maximum load factor."""
+    """A hash table with Horner hashing and separate chaining.
+
+    Set ``max_load`` to None to disable resizing. ``bucket_count`` selects the
+    initial number of buckets.
+    """
 
     _INITIAL_CAPACITY = 8
     _MAX_LOAD_FACTOR = 0.75
 
-    def __init__(self):
-        self._buckets = [None] * self._INITIAL_CAPACITY
+    def __init__(self, bucket_count=_INITIAL_CAPACITY, max_load=_MAX_LOAD_FACTOR):
+        if not isinstance(bucket_count, int) or isinstance(bucket_count, bool):
+            raise TypeError("bucket_count must be an integer")
+        if bucket_count < 1:
+            raise ValueError("bucket_count must be positive")
+        if max_load is not None and (
+            not isinstance(max_load, (int, float)) or max_load <= 0
+        ):
+            raise ValueError("max_load must be positive or None")
+
+        self._buckets = [None] * bucket_count
+        self._max_load = max_load
         self.size = 0
 
     def _index(self, key):
@@ -41,21 +55,31 @@ class HashTable:
 
         self._buckets[index] = _Node(key, value, self._buckets[index])
         self.size += 1
-        if self.size / len(self._buckets) > self._MAX_LOAD_FACTOR:
+        if (
+            self._max_load is not None
+            and self.size / len(self._buckets) > self._max_load
+        ):
             self._resize()
         return value
 
     def get(self, key):
         """Return the value for a key, or None when it is absent."""
+        value, _ = self.get_with_probes(key)
+        return value
+
+    def get_with_probes(self, key):
+        """Return a key's value and the number of chain nodes examined."""
         if not isinstance(key, str):
             raise TypeError("key must be a string")
 
         node = self._buckets[self._index(key)]
+        probes = 0
         while node is not None:
+            probes += 1
             if node.key == key:
-                return node.value
+                return node.value, probes
             node = node.next
-        return None
+        return None, probes
 
     def _resize(self):
         old_buckets = self._buckets

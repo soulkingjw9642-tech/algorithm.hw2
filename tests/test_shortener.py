@@ -46,6 +46,16 @@ class URLShortenerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             URLShortener().expand("1")
 
+    def test_shortener_supports_both_collision_strategies(self):
+        for strategy in ("chaining", "linear"):
+            with self.subTest(strategy=strategy):
+                shortener = URLShortener(collision_strategy=strategy)
+                url = "https://example.com/strategy"
+                code = shortener.shorten(url)
+
+                self.assertEqual(shortener.collision_strategy, strategy)
+                self.assertEqual(shortener.expand(code), url)
+
 
 if __name__ == "__main__":
     unittest.main()

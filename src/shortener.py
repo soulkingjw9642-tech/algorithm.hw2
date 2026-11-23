@@ -9,9 +9,10 @@ from src.hash_table import HashTable
 class URLShortener:
     """Shorten HTTP(S) URLs and expand issued base62 codes."""
 
-    def __init__(self):
-        self._url_to_code = HashTable()
-        self._code_to_url = HashTable()
+    def __init__(self, collision_strategy="chaining"):
+        self._url_to_code = HashTable(collision_strategy=collision_strategy)
+        self._code_to_url = HashTable(collision_strategy=collision_strategy)
+        self.collision_strategy = collision_strategy
         self._next_id = 0
 
     def shorten(self, url):

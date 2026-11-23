@@ -11,9 +11,18 @@
   "workspaceFolder": "/work",
   "overrideCommand": false,
   "remoteUser": "root",
-  "forwardPorts": [8000],
+  "forwardPorts": [8000, 18000],
   "portsAttributes": {
-    "8000": { "label": "url-shortener", "onAutoForward": "notify" }
+    "8000": {
+      "label": "url-shortener",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    },
+    "18000": {
+      "label": "url-shortener-alt",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    }
   },
   "customizations": {
     "vscode": {

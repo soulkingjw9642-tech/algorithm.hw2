@@ -35,6 +35,49 @@ class HashTableTests(unittest.TestCase):
         for number in range(7):
             self.assertEqual(table.get(f"key-{number}"), number)
 
+    def test_linear_probing_wraps_from_last_slot_to_first(self):
+        table = HashTable(
+            bucket_count=4,
+            max_load=None,
+            collision_strategy="linear",
+        )
+        for key in ("c", "g", "k", "o"):
+            table.put(key, key.upper())
+
+        self.assertEqual(table.probe_path("o"), [3, 0, 1, 2])
+        self.assertEqual(table.get_with_probes("o"), ("O", 4))
+        self.assertEqual(table.get("c"), "C")
+        self.assertEqual(table.get("g"), "G")
+
+    def test_linear_probing_full_table_reports_all_probes_and_rejects_insert(self):
+        table = HashTable(
+            bucket_count=4,
+            max_load=None,
+            collision_strategy="linear",
+        )
+        for key in ("c", "g", "k", "o"):
+            table.put(key, key)
+
+        self.assertEqual(table.get_with_probes("w"), (None, 4))
+        with self.assertRaises(OverflowError):
+            table.put("w", "W")
+
+    def test_linear_probing_resizes_and_rehashes_entries(self):
+        table = HashTable(
+            bucket_count=4,
+            collision_strategy="linear",
+        )
+        for key in ("a", "b", "c", "d"):
+            table.put(key, key.upper())
+
+        self.assertEqual(len(table._buckets), 8)
+        for key in ("a", "b", "c", "d"):
+            self.assertEqual(table.get(key), key.upper())
+
+    def test_rejects_unknown_collision_strategy(self):
+        with self.assertRaises(ValueError):
+            HashTable(collision_strategy="quadratic")
+
 
 if __name__ == "__main__":
     unittest.main()

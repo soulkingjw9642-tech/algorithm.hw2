@@ -14,6 +14,15 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 from src.shortener import URLShortener
 
 _MAX_REQUEST_SIZE = 65536
+_EXAMPLE_URLS = (
+    "https://example.com/demo/5",
+    "https://example.com/demo/10",
+    "https://example.com/demo/18",
+    "https://example.com/demo/21",
+    "https://example.com/demo/29",
+    "https://example.com/demo/32",
+)
+_EXAMPLE_MISSING_URL = "https://example.com/demo/missing-2-7"
 
 
 def _page(title, content):
@@ -78,7 +87,7 @@ def _short_path(strategy, code):
     return f"/{prefix}/{_html_escape(code)}"
 
 
-def _table_page(shortener, base_url, strategy):
+def _table_page(shortener, base_url, strategy, search_key):
     table = shortener._url_to_code
     bucket_count = len(table._buckets)
     if strategy == "chaining":
@@ -92,6 +101,34 @@ def _table_page(shortener, base_url, strategy):
         '<a href="/table?strategy=linear">선형 탐지</a> · '
         '<a href="/">새 URL 줄이기</a></p>'
     )
+
+    search_value = _html_escape(search_key)
+    content += (
+        '<section class="bucket"><h2>실패 탐색 예제</h2>'
+        "<p>표에 없는 URL을 찾아 실패했을 때 살펴본 양을 비교합니다.</p>"
+        '<form action="/table" method="get">'
+        f'<input type="hidden" name="strategy" value="{strategy}">'
+        '<label for="search">찾을 URL</label><br>'
+        f'<input id="search" name="search" type="url" value="{search_value}" required>'
+        '<br><button type="submit">해시 테이블에서 찾기</button></form>'
+    )
+    if len(search_key) > 2048:
+        content += "<p>검색 URL은 2048자 이하여야 합니다.</p></section>"
+    else:
+        found, probes = table.get_with_probes(search_key)
+        steps, start_bucket = _hash_calculation(search_key, bucket_count)
+        outcome = "찾음" if found is not None else "찾지 못함 (실패 탐색)"
+        content += (
+            f"<p><strong>결과:</strong> {outcome}</p>"
+            f"<details open><summary>호너 해시 및 탐색 근거 "
+            f"(시작 버킷 {start_bucket})</summary><ol>{steps}</ol>"
+        )
+        if strategy == "linear":
+            path = " → ".join(str(slot) for slot in table.probe_path(search_key))
+            content += f"<p>확인한 칸 {probes}개: {path}</p>"
+        else:
+            content += f"<p>비교한 연결 리스트 노드 {probes}개</p>"
+        content += "</details></section>"
 
     for bucket_index, head in enumerate(table._buckets):
         content += (
@@ -193,6 +230,11 @@ def create_server(host="0.0.0.0", port=8000, shortener=None):
                     '<br><button type="submit">줄이기</button></form>'
                     '<p><a href="/table?strategy=chaining">체이닝 테이블 보기</a> · '
                     '<a href="/table?strategy=linear">선형 탐지 테이블 보기</a></p>'
+                    '<hr><h2>충돌·실패 탐색 예제</h2>'
+                    '<p>같은 버킷에 들어가도록 준비한 6개 URL을 두 방식에 넣고, '
+                    '표에 없는 URL을 검색해 실패 탐색 횟수를 비교합니다.</p>'
+                    '<form action="/examples" method="post">'
+                    '<button type="submit">예제 URL 6개 넣기</button></form>'
                 )
                 self._respond(200, _page("URL 단축기", content))
                 return
@@ -216,6 +258,14 @@ def create_server(host="0.0.0.0", port=8000, shortener=None):
                         app_for(strategy),
                         _base_url(self.headers),
                         strategy,
+                        next(
+                            (
+                                value
+                                for name, value in query
+                                if name == "search"
+                            ),
+                            _EXAMPLE_MISSING_URL,
+                        ),
                     ),
                 )
                 return
@@ -275,7 +325,32 @@ def create_server(host="0.0.0.0", port=8000, shortener=None):
             self._respond(404, _page("페이지를 찾을 수 없음", "<p>요청한 페이지가 없습니다.</p>"))
 
         def do_POST(self):
-            if urlsplit(self.path).path != "/shorten":
+            request_path = urlsplit(self.path).path
+            if request_path == "/examples":
+                content = (
+                    "<p>예제 URL을 개별 체이닝과 선형 탐지 테이블에 넣었습니다. "
+                    "모든 예제는 같은 시작 버킷으로 해시되어 두 방식의 충돌 처리를 "
+                    "비교하기 쉽습니다.</p><ul>"
+                )
+                for url in _EXAMPLE_URLS:
+                    chaining_code = app_for("chaining").shorten(url)
+                    linear_code = app_for("linear").shorten(url)
+                    content += (
+                        f"<li>{_html_escape(url)} · "
+                        f'<a href="{_short_path("chaining", chaining_code)}">'
+                        f"체이닝 링크</a> · "
+                        f'<a href="{_short_path("linear", linear_code)}">'
+                        f"선형 탐지 링크</a></li>"
+                    )
+                content += (
+                    "</ul><p>표에 없는 URL을 찾는 실패 사례도 확인해 보세요.</p>"
+                    '<p><a href="/table?strategy=chaining">체이닝 실패 탐색 보기</a> · '
+                    '<a href="/table?strategy=linear">선형 탐지 실패 탐색 보기</a></p>'
+                )
+                self._respond(200, _page("예제 링크 준비 완료", content))
+                return
+
+            if request_path != "/shorten":
                 self._respond(404, _page("페이지를 찾을 수 없음", "<p>요청한 페이지가 없습니다.</p>"))
                 return
 

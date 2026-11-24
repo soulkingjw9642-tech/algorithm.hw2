@@ -90,6 +90,30 @@ class ServerTests(unittest.TestCase):
         self.assertIn("https://example.com/a", body)
         self.assertIn("https://example.com/i", body)
 
+    def test_example_urls_show_failed_search_for_both_strategies(self):
+        self.connection.request("POST", "/examples")
+        response = self.connection.getresponse()
+        example_page = response.read().decode("utf-8")
+
+        self.assertEqual(response.status, 200)
+        self.assertIn("https://example.com/demo/5", example_page)
+        self.assertIn("체이닝 링크", example_page)
+        self.assertIn("선형 탐지 링크", example_page)
+
+        self.connection.request("GET", "/table?strategy=chaining")
+        chaining_response = self.connection.getresponse()
+        chaining_page = chaining_response.read().decode("utf-8")
+        self.assertEqual(chaining_response.status, 200)
+        self.assertIn("비교한 연결 리스트 노드 6개", chaining_page)
+        self.assertIn("찾지 못함 (실패 탐색)", chaining_page)
+
+        self.connection.request("GET", "/table?strategy=linear")
+        linear_response = self.connection.getresponse()
+        linear_page = linear_response.read().decode("utf-8")
+        self.assertEqual(linear_response.status, 200)
+        self.assertIn("확인한 칸 7개: 2 → 3 → 4 → 5 → 6 → 7 → 0", linear_page)
+        self.assertIn("찾지 못함 (실패 탐색)", linear_page)
+
     def test_linear_strategy_links_and_table_show_probe_path(self):
         for suffix in ("a", "i"):
             self.connection.request(
